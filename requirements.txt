@@ -1,0 +1,8 @@
+binance
+cryptography
+requests
+aiohttp
+python-binance
+pandas
+numpy
+matplotlib

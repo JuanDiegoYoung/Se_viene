@@ -1,0 +1,16 @@
+# Ignore all CSV files
+*.csv
+
+# Byte-compiled / build
+__pycache__/
+*.pyc
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Virtual env
+venv/
+.env
