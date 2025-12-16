@@ -1,0 +1,12 @@
+{
+  "klinger_above_zero__stochrsi_cross": 8.640963855421687,
+  "ema_slope_50__stochrsi_cross": 8.439809296781883,
+  "cmf_thresh__klinger_above_zero": 8.665149544863459,
+  "cci_high_quantile__stochrsi_trend": 10.342763157894737,
+  "rsi_band_46_54__stochrsi_cross": 9.133986928104575,
+  "hma_slope_pos__ichimoku_above_cloud": 11.083866837387964,
+  "klinger_above_zero__rec_expand_1.30": 11.147659854976927,
+  "ema_slope_100__vortex_strength": 11.456677524429967,
+  "hma_slope_pos__stochrsi_trend": 8.95320623916811,
+  "er_trend_0.25__vortex_trend": 11.574649603900061
+}

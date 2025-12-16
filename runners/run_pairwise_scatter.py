@@ -285,7 +285,7 @@ df_pairs.to_csv(OUT_CSV, index=False)
 # Filtros duros
 # -----------------------------------------
 df_filt = df_pairs[
-    (df_pairs["n_trades"].between(1500, 2000)) &
+    (df_pairs["n_trades"] > 1500) &
     (df_pairs["final_equity"] > 50) &
     (df_pairs["maxdd"] < 20)
 ].copy()
@@ -341,7 +341,7 @@ top10.to_csv(
 
 print("Saved:")
 print(f"- pairwise_scatter_filtered_{target_score}.png")
-print(f"- top10_pairs_by_{top10_score}.csv")
+print(f"- top10_pairs_by_{target_score}.csv")
 print(top10[[
     "filter_a",
     "filter_b",

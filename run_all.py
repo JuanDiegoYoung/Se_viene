@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""Run all runner scripts in logical order for a given asset/timeframe/window/rr.
+
+Usage examples:
+  python run_all.py --asset ETHUSDT --timeframe 1h --window 5 --rr 1.0
+  python run_all.py --asset BTCUSDT --timeframe 1h --download
+
+This script locates `runners/` scripts and executes them in a sensible order.
+If a runner fails, by default it logs the error and continues; use
+`--stop-on-error` to abort on the first failure.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import subprocess
+import sys
+from typing import List
+
+
+def find_runners() -> List[str]:
+    base = os.path.join(os.path.dirname(__file__), "runners")
+    all_py = [f for f in os.listdir(base) if f.endswith(".py")]
+    # Preferred ordered list (only include if present)
+    preferred = [
+        "run_download_candles.py",
+        "run_canonical.py",
+        "run_all_filters.py",
+        "run_single_filter.py",
+        "run_pairwise_scatter.py",
+        "run_scatter.py",
+        "run_scatter_filtered.py",
+        "run_sl_distribution.py",
+        "run_trade_duration.py",
+        "run_time_duration.py",
+        "run_equity_winners.py",
+    ]
+
+    ordered = []
+    for name in preferred:
+        if name in all_py:
+            ordered.append(name)
+
+    # Append any remaining runner scripts alphabetically
+    for name in sorted(all_py):
+        if name not in ordered:
+            ordered.append(name)
+
+    return ordered
+
+
+def build_cmd(script: str, asset: str, timeframe: str, window: int | None, rr: float | None) -> List[str]:
+    script_path = os.path.join("runners", script)
+    cmd = [sys.executable, script_path, "--asset", asset, "--timeframe", timeframe]
+    if window is not None:
+        cmd += ["--window", str(window)]
+    if rr is not None:
+        cmd += ["--rr", str(rr)]
+    return cmd
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description="Run all pipeline runners in sequence")
+    p.add_argument("--asset", required=True)
+    p.add_argument("--timeframe", required=True)
+    p.add_argument("--window", type=int, default=None)
+    p.add_argument("--rr", type=float, default=None)
+    p.add_argument("--download", action="store_true", help="run download step first (if available)")
+    p.add_argument("--stop-on-error", action="store_true", help="abort on first failing runner")
+    args = p.parse_args()
+
+    runners = find_runners()
+
+    # If user didn't request download, filter it out
+    if not args.download:
+        runners = [r for r in runners if r != "run_download_candles.py"]
+
+    print("Runners to execute:")
+    for r in runners:
+        print(" -", r)
+
+    for script in runners:
+        print(f"\n=== Running: {script} ===")
+        cmd = build_cmd(script, args.asset, args.timeframe, args.window, args.rr)
+        print(" ", " ".join(cmd))
+        try:
+            # Run and forward child stdout/stderr
+            proc = subprocess.run(cmd, check=False)
+            rc = proc.returncode
+            if rc != 0:
+                print(f"Runner {script} exited with code {rc}")
+                if args.stop_on_error:
+                    raise SystemExit(rc)
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            print(f"Failed to run {script}: {e}")
+            if args.stop_on_error:
+                raise
+
+
+if __name__ == "__main__":
+    main()
