@@ -26,7 +26,6 @@ def find_runners() -> List[str]:
         "run_download_candles.py",
         "run_canonical.py",
         "run_all_filters.py",
-        "run_single_filter.py",
         "run_pairwise_scatter.py",
         "run_scatter.py",
         "run_scatter_filtered.py",
@@ -49,9 +48,11 @@ def find_runners() -> List[str]:
     return ordered
 
 
-def build_cmd(script: str, asset: str, timeframe: str, window: int | None, rr: float | None) -> List[str]:
+def build_cmd(script: str, asset: str, timeframe: str, window: int | None, rr: float | None, strategy: str | None = None) -> List[str]:
     script_path = os.path.join("runners", script)
     cmd = [sys.executable, script_path, "--asset", asset, "--timeframe", timeframe]
+    if strategy is not None:
+        cmd += ["--strategy", strategy]
     if window is not None:
         cmd += ["--window", str(window)]
     if rr is not None:
@@ -65,7 +66,9 @@ def main() -> None:
     p.add_argument("--timeframe", required=True)
     p.add_argument("--window", type=int, default=None)
     p.add_argument("--rr", type=float, default=None)
+    p.add_argument("--strategy", required=False, default="boschonk", help="strategy name to pass to runners (default: boschonk)")
     p.add_argument("--download", action="store_true", help="run download step first (if available)")
+    p.add_argument("--include-single", action="store_true", help="also run run_single_filter.py (excluded by default)")
     p.add_argument("--stop-on-error", action="store_true", help="abort on first failing runner")
     args = p.parse_args()
 
@@ -75,13 +78,25 @@ def main() -> None:
     if not args.download:
         runners = [r for r in runners if r != "run_download_candles.py"]
 
+    # Exclude run_single_filter.py by default unless explicitly requested
+    if not args.include_single:
+        runners = [r for r in runners if r != "run_single_filter.py"]
+
     print("Runners to execute:")
     for r in runners:
         print(" -", r)
 
     for script in runners:
         print(f"\n=== Running: {script} ===")
-        cmd = build_cmd(script, args.asset, args.timeframe, args.window, args.rr)
+        cmd = build_cmd(script, args.asset, args.timeframe, args.window, args.rr, strategy=args.strategy)
+
+        # auto-detect top/pairs CSV produced by pairwise scatter
+        base_exp = os.path.join("experiments", args.strategy, args.asset, args.timeframe, f"window_{args.window}", f"rr_{args.rr}")
+        pairs_csv = os.path.join(base_exp, "scatters", "top10_pairs_by_win_rate.csv")
+        if script == "run_sl_distribution.py" and os.path.exists(pairs_csv):
+            cmd += ["--pairs_csv", pairs_csv]
+        if script == "run_trade_duration.py" and os.path.exists(pairs_csv):
+            cmd += ["--top_csv", pairs_csv]
         print(" ", " ".join(cmd))
         try:
             # Run and forward child stdout/stderr

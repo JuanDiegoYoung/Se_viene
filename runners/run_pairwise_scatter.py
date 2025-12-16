@@ -233,6 +233,12 @@ for fname in filter_names:
         "win_rate": win_rate,
     }
 
+# Save keep cache so downstream runners (SL distribution, etc.) can use it
+keep_matrix = np.vstack([filter_to_keep[name].astype(bool) for name in filter_names])
+cache_path = os.path.join(SCATTERS_DIR, "filter_keep_cache.npz")
+np.savez(cache_path, filter_names=np.array(filter_names, dtype=object), keep_matrix=keep_matrix)
+print(f"Saved keep cache: {cache_path}")
+
 # ============================================================
 # Pairwise AND, equity resultante, scatter
 # ============================================================
