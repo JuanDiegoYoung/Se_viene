@@ -103,16 +103,43 @@ def main():
     SCATTERS_DIR = os.path.join(EXP_DIR, "scatters")
     OUT_DIR = os.path.join(EXP_DIR, "pairwise_winners")
     OUT_DATA_DIR = os.path.join(OUT_DIR, "data")
-    OUT_PLOTS_DIR = os.path.join(OUT_DIR, "plots")
+    OUT_EQUITY_DIR = os.path.join(OUT_DIR, "equity")
     os.makedirs(OUT_DATA_DIR, exist_ok=True)
-    os.makedirs(OUT_PLOTS_DIR, exist_ok=True)
+    os.makedirs(OUT_EQUITY_DIR, exist_ok=True)
     OUT_SL_DIR = os.path.join(OUT_DIR, "stop_loss_distributions")
     OUT_SL_DATA = os.path.join(OUT_SL_DIR, "stop_loss_data")
     OUT_SL_HISTS = os.path.join(OUT_SL_DIR, "stop_loss_histograms")
     os.makedirs(OUT_SL_DATA, exist_ok=True)
     os.makedirs(OUT_SL_HISTS, exist_ok=True)
 
-    top_csv = args.top_csv or os.path.join(SCATTERS_DIR, "top10_pairs_by_win_rate.csv")
+    top_csv = args.top_csv
+    if top_csv is None:
+        # auto-detect
+        candidates = []
+        pw = os.path.join(EXP_DIR, "pairwise_winners", "top_pairwise.csv")
+        if os.path.exists(pw):
+            candidates.append(pw)
+        scat_data = os.path.join(EXP_DIR, "scatters", "data")
+        if os.path.isdir(scat_data):
+            for f in os.listdir(scat_data):
+                if f.startswith("top10_pairs_by_") and f.endswith(".csv"):
+                    candidates.append(os.path.join(scat_data, f))
+        scat_root = os.path.join(EXP_DIR, "scatters")
+        if os.path.isdir(scat_root):
+            for f in os.listdir(scat_root):
+                if f.startswith("top10_pairs_by_") and f.endswith(".csv"):
+                    candidates.append(os.path.join(scat_root, f))
+
+        pref = [pw,
+                os.path.join(scat_data, "top10_pairs_by_win_rate.csv") if os.path.isdir(scat_data) else None,
+                os.path.join(scat_data, "top10_pairs_by_n_trades.csv") if os.path.isdir(scat_data) else None]
+        top_csv = None
+        for p in pref:
+            if p and os.path.exists(p):
+                top_csv = p
+                break
+        if top_csv is None and candidates:
+            top_csv = sorted(candidates)[0]
     if not os.path.exists(top_csv):
         raise SystemExit(f"Top CSV not found: {top_csv}")
 
@@ -252,7 +279,7 @@ def main():
             ax.set_title(f"Equity — {a} & {b}")
             ax.grid(True, alpha=0.3)
             plot_name = f"{a}__{b}_equity.png"
-            plot_path = os.path.join(OUT_PLOTS_DIR, plot_name)
+            plot_path = os.path.join(OUT_EQUITY_DIR, plot_name)
             plt.tight_layout()
             plt.savefig(plot_path, dpi=160)
             plt.close(fig)
@@ -320,7 +347,7 @@ def main():
 
     # concise summary
     print(f"Saved {len(saved_data)} equity CSVs to: {OUT_DATA_DIR}")
-    print(f"Saved {len(saved_plots)} plots to: {OUT_PLOTS_DIR}")
+    print(f"Saved {len(saved_plots)} plots to: {OUT_EQUITY_DIR}")
     if sl_summary_rows:
         print(f"Saved SL CSVs/hists to: {OUT_SL_DIR} (summary rows: {len(sl_summary_rows)})")
     if skipped:

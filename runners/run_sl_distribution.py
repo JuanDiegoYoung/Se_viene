@@ -77,7 +77,7 @@ def main():
     p.add_argument("--timeframe", required=True)
     p.add_argument("--window", type=int, required=True)
     p.add_argument("--rr", type=float, required=True)
-    p.add_argument("--pairs_csv", required=True)
+    p.add_argument("--pairs_csv", required=False, help="Path to pairs CSV (optional). If omitted the script will try to detect top CSV in pairwise_winners or scatters directories.")
     p.add_argument("--top_k", type=int, default=10)
     args = p.parse_args()
 
@@ -99,17 +99,57 @@ def main():
     SCATTERS_DIR = os.path.join(EXP_DIR, "scatters")
     os.makedirs(SCATTERS_DIR, exist_ok=True)
 
+    # output into pairwise_winners/stop_loss_distributions by default
+    OUT_DIR = os.path.join(EXP_DIR, "pairwise_winners", "stop_loss_distributions")
+    OUT_DATA = os.path.join(OUT_DIR, "stop_loss_data")
+    OUT_PLOTS = os.path.join(OUT_DIR, "stop_loss_histograms")
+    os.makedirs(OUT_DIR, exist_ok=True)
+    os.makedirs(OUT_DATA, exist_ok=True)
+    os.makedirs(OUT_PLOTS, exist_ok=True)
+
     trades_path = os.path.join(CANONICAL_DIR, "trades.csv")
     if not os.path.exists(trades_path):
         raise SystemExit(f"No encuentro trades.csv en: {trades_path}")
 
     pairs_path = args.pairs_csv
-    if not os.path.exists(pairs_path):
-        alt = os.path.join(PROJECT_ROOT, pairs_path)
-        if os.path.exists(alt):
-            pairs_path = alt
-        else:
-            raise SystemExit(f"No encuentro pairs_csv: {args.pairs_csv}")
+    if pairs_path is None:
+        # try to auto-detect
+        candidates = []
+        # preferred: pairwise_winners/top_pairwise.csv
+        pw = os.path.join(EXP_DIR, "pairwise_winners", "top_pairwise.csv")
+        if os.path.exists(pw):
+            candidates.append(pw)
+        # scatters/data
+        scat_data = os.path.join(EXP_DIR, "scatters", "data")
+        if os.path.isdir(scat_data):
+            for f in os.listdir(scat_data):
+                if f.startswith("top10_pairs_by_") and f.endswith(".csv"):
+                    candidates.append(os.path.join(scat_data, f))
+        # scatters root
+        scat_root = os.path.join(EXP_DIR, "scatters")
+        if os.path.isdir(scat_root):
+            for f in os.listdir(scat_root):
+                if f.startswith("top10_pairs_by_") and f.endswith(".csv"):
+                    candidates.append(os.path.join(scat_root, f))
+
+        pairs_path = None
+        pref = [pw,
+                os.path.join(scat_data, "top10_pairs_by_win_rate.csv") if os.path.isdir(scat_data) else None,
+                os.path.join(scat_data, "top10_pairs_by_n_trades.csv") if os.path.isdir(scat_data) else None]
+        for p in pref:
+            if p and os.path.exists(p):
+                pairs_path = p
+                break
+        if pairs_path is None and candidates:
+            pairs_path = sorted(candidates)[0]
+
+    else:
+        if not os.path.exists(pairs_path):
+            alt = os.path.join(PROJECT_ROOT, pairs_path)
+            if os.path.exists(alt):
+                pairs_path = alt
+            else:
+                raise SystemExit(f"No encuentro pairs_csv: {args.pairs_csv}")
 
     pairs = pd.read_csv(pairs_path)
     if "filter_a" not in pairs.columns or "filter_b" not in pairs.columns:
@@ -174,6 +214,24 @@ def main():
             "sl_pct_p75": float(np.nanpercentile(dist_pct, 75)) if len(dist_pct) else np.nan,
             "sl_pct_p90": float(np.nanpercentile(dist_pct, 90)) if len(dist_pct) else np.nan,
         })
+        # save individual CSV and histogram per pair into pairwise_winners
+        csv_out = os.path.join(OUT_DATA, f"{a}__{b}_sl_abs.csv")
+        pd.DataFrame({"sl_abs": dist_abs}).to_csv(csv_out, index=False)
+        try:
+            fig, ax = plt.subplots(figsize=(8, 3))
+            ax.hist(dist_abs, bins=40, alpha=0.7)
+            mean_val = float(np.nanmean(dist_abs))
+            ax.axvline(mean_val, color="red", linestyle="-", linewidth=1.2, label=f"mean={mean_val:.4g}")
+            ax.legend(loc="upper right", fontsize=9)
+            ax.set_title(f"SL abs distribution — {a} & {b}")
+            ax.set_xlabel("SL size (abs)")
+            ax.set_ylabel("Count")
+            hist_path = os.path.join(OUT_PLOTS, f"{a}__{b}_sl_hist.png")
+            plt.tight_layout()
+            plt.savefig(hist_path, dpi=140)
+            plt.close(fig)
+        except Exception:
+            hist_path = None
 
         plt.hist(dist_abs, bins=40, alpha=0.35, label=f"{a} & {b} (n={len(trades_ab)})")
 
@@ -181,8 +239,8 @@ def main():
         raise SystemExit("No pude calcular nada: pares no matchean con el cache o no hay trades filtrados.")
 
     out_df = pd.DataFrame(out_rows).sort_values(["sl_abs_p50"], ascending=True)
-    out_csv = os.path.join(SCATTERS_DIR, "sl_distribution_top_pairs.csv")
-    out_png = os.path.join(SCATTERS_DIR, "sl_distribution_top_pairs.png")
+    out_csv = os.path.join(OUT_DIR, "sl_summary_top_pairs.csv")
+    out_png = os.path.join(OUT_DIR, "sl_distribution_top_pairs.png")
 
     out_df.to_csv(out_csv, index=False)
 
@@ -198,6 +256,8 @@ def main():
     print("Cache =", cache_path)
     print("Saved CSV =", out_csv)
     print("Saved PNG =", out_png)
+    print("Saved per-pair CSVs to:", OUT_DATA)
+    print("Saved per-pair histograms to:", OUT_PLOTS)
 
 if __name__ == "__main__":
     main()

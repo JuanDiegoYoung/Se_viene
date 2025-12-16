@@ -10,7 +10,7 @@ p.add_argument("--asset", required=True)
 p.add_argument("--timeframe", required=True)
 p.add_argument("--window", type=int, required=True)
 p.add_argument("--rr", type=float, required=True)
-p.add_argument("--top_csv", required=True)
+p.add_argument("--top_csv", required=False, help="Path to top CSV (optional). If omitted the script will try to detect top CSV in pairwise_winners or scatters directories.")
 args = p.parse_args()
 
 rr_str = f"{args.rr:.1f}"
@@ -32,7 +32,39 @@ OUT_DIR = os.path.join(EXP_DIR, "scatters")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 trades = pd.read_csv(os.path.join(CANONICAL_DIR, "trades.csv"))
-top = pd.read_csv(args.top_csv)
+
+# auto-detect top CSV if not provided
+top_csv = args.top_csv
+if top_csv is None:
+    candidates = []
+    pw = os.path.join(EXP_DIR, "pairwise_winners", "top_pairwise.csv")
+    if os.path.exists(pw):
+        candidates.append(pw)
+    scat_data = os.path.join(EXP_DIR, "scatters", "data")
+    if os.path.isdir(scat_data):
+        for f in os.listdir(scat_data):
+            if f.startswith("top10_pairs_by_") and f.endswith(".csv"):
+                candidates.append(os.path.join(scat_data, f))
+    scat_root = os.path.join(EXP_DIR, "scatters")
+    if os.path.isdir(scat_root):
+        for f in os.listdir(scat_root):
+            if f.startswith("top10_pairs_by_") and f.endswith(".csv"):
+                candidates.append(os.path.join(scat_root, f))
+
+    pref = [pw,
+            os.path.join(scat_data, "top10_pairs_by_win_rate.csv") if os.path.isdir(scat_data) else None,
+            os.path.join(scat_data, "top10_pairs_by_n_trades.csv") if os.path.isdir(scat_data) else None]
+    top_csv = None
+    for p in pref:
+        if p and os.path.exists(p):
+            top_csv = p
+            break
+    if top_csv is None and candidates:
+        top_csv = sorted(candidates)[0]
+if top_csv is None or not os.path.exists(top_csv):
+    raise SystemExit(f"Top CSV not found: {top_csv}")
+
+top = pd.read_csv(top_csv)
 
 rows = []
 

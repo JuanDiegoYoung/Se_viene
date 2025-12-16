@@ -40,8 +40,10 @@ INFO_DIR = os.path.join(EXP_DIR, "iteration_1", "info")
 
 SCATTERS_DIR = os.path.join(EXP_DIR, "scatters")
 os.makedirs(SCATTERS_DIR, exist_ok=True)
+DATA_DIR = os.path.join(SCATTERS_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
 
-OUT_CSV = os.path.join(SCATTERS_DIR, "filters_scatter_data.csv")
+OUT_CSV = os.path.join(DATA_DIR, "filters_scatter_data.csv")
 OUT_PNG = os.path.join(SCATTERS_DIR, "filters_scatter.png")
 
 if not os.path.isdir(INFO_DIR):

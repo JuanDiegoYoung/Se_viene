@@ -48,7 +48,14 @@ def find_runners() -> List[str]:
     return ordered
 
 
-def build_cmd(script: str, asset: str, timeframe: str, window: int | None, rr: float | None, strategy: str | None = None) -> List[str]:
+def build_cmd(
+    script: str,
+    asset: str,
+    timeframe: str,
+    window: int | None,
+    rr: float | None,
+    strategy: str | None = None,
+) -> List[str]:
     script_path = os.path.join("runners", script)
     cmd = [sys.executable, script_path, "--asset", asset, "--timeframe", timeframe]
     if strategy is not None:
@@ -69,6 +76,9 @@ def main() -> None:
     p.add_argument("--strategy", required=False, default="boschonk", help="strategy name to pass to runners (default: boschonk)")
     p.add_argument("--download", action="store_true", help="run download step first (if available)")
     p.add_argument("--include-single", action="store_true", help="also run run_single_filter.py (excluded by default)")
+    p.add_argument("--min-n-trades", type=int, default=None, help="minimum n_trades to pass pairwise filters; forwarded to pairwise runner")
+    p.add_argument("--min-final-equity", type=float, default=None, help="minimum final_equity to pass pairwise filters; forwarded to pairwise runner")
+    p.add_argument("--max-maxdd", type=float, default=None, help="maximum maxdd to pass pairwise filters; forwarded to pairwise runner")
     p.add_argument("--stop-on-error", action="store_true", help="abort on first failing runner")
     args = p.parse_args()
 
@@ -88,15 +98,57 @@ def main() -> None:
 
     for script in runners:
         print(f"\n=== Running: {script} ===")
-        cmd = build_cmd(script, args.asset, args.timeframe, args.window, args.rr, strategy=args.strategy)
+        cmd = build_cmd(
+            script,
+            args.asset,
+            args.timeframe,
+            args.window,
+            args.rr,
+            strategy=args.strategy,
+        )
 
         # auto-detect top/pairs CSV produced by pairwise scatter
         base_exp = os.path.join("experiments", args.strategy, args.asset, args.timeframe, f"window_{args.window}", f"rr_{args.rr}")
-        pairs_csv = os.path.join(base_exp, "scatters", "top10_pairs_by_win_rate.csv")
-        if script == "run_sl_distribution.py" and os.path.exists(pairs_csv):
-            cmd += ["--pairs_csv", pairs_csv]
-        if script == "run_trade_duration.py" and os.path.exists(pairs_csv):
-            cmd += ["--top_csv", pairs_csv]
+        scatters_data = os.path.join(base_exp, "scatters", "data")
+        scatters_root = os.path.join(base_exp, "scatters")
+
+        # prefer win_rate then n_trades, search data/ then root
+        selected_top = None
+        candidates = []
+        if os.path.isdir(scatters_data):
+            candidates += [os.path.join(scatters_data, f) for f in os.listdir(scatters_data) if f.startswith("top10_pairs_by_") and f.endswith(".csv")]
+        if os.path.isdir(scatters_root):
+            candidates += [os.path.join(scatters_root, f) for f in os.listdir(scatters_root) if f.startswith("top10_pairs_by_") and f.endswith(".csv")]
+
+        pref_order = [
+            os.path.join(scatters_data, "top10_pairs_by_win_rate.csv"),
+            os.path.join(scatters_data, "top10_pairs_by_n_trades.csv"),
+            os.path.join(scatters_root, "top10_pairs_by_win_rate.csv"),
+            os.path.join(scatters_root, "top10_pairs_by_n_trades.csv"),
+        ]
+        for p in pref_order:
+            if os.path.exists(p):
+                selected_top = p
+                break
+        if selected_top is None and candidates:
+            selected_top = sorted(candidates)[0]
+        if script == "run_pairwise_scatter.py":
+            # forward user-specified thresholds only to the pairwise runner
+            if args.min_n_trades is not None:
+                cmd += ["--min-n-trades", str(args.min_n_trades)]
+            if args.min_final_equity is not None:
+                cmd += ["--min-final-equity", str(args.min_final_equity)]
+            if args.max_maxdd is not None:
+                cmd += ["--max-maxdd", str(args.max_maxdd)]
+        if selected_top is not None:
+            if script == "run_sl_distribution.py":
+                cmd += ["--pairs_csv", selected_top]
+            if script == "run_trade_duration.py":
+                cmd += ["--top_csv", selected_top]
+            if script == "run_time_duration.py":
+                cmd += ["--top_csv", selected_top]
+            if script == "run_equity_winners.py":
+                cmd += ["--top_csv", selected_top]
         print(" ", " ".join(cmd))
         try:
             # Run and forward child stdout/stderr

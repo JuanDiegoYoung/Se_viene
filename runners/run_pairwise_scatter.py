@@ -9,6 +9,8 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib import colors as mcolors
+import matplotlib.cm as cm
 
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -23,6 +25,9 @@ p.add_argument("--timeframe", required=True)
 p.add_argument("--window", type=int, required=True)
 p.add_argument("--rr", type=float, required=True)
 p.add_argument("--tol", type=float, default=1e-9, help="Tolerance for float matching when reconstructing keeps")
+p.add_argument("--min-n-trades", type=int, default=1500, help="Minimum trades for a pair to pass hard filters")
+p.add_argument("--min-final-equity", type=float, default=50.0, help="Minimum final equity for a pair to pass hard filters")
+p.add_argument("--max-maxdd", type=float, default=20.0, help="Maximum allowed max drawdown for a pair to pass hard filters")
 args = p.parse_args()
 
 rr_str = f"{args.rr:.1f}"
@@ -47,8 +52,10 @@ ITER_DIR = os.path.join(EXP_DIR, "iteration_1")
 EQUITY_DIR = os.path.join(ITER_DIR, "equity")
 SCATTERS_DIR = os.path.join(EXP_DIR, "scatters")
 os.makedirs(SCATTERS_DIR, exist_ok=True)
+DATA_DIR = os.path.join(SCATTERS_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
 
-OUT_CSV = os.path.join(SCATTERS_DIR, "pairwise_filters_scatter_data.csv")
+OUT_CSV = os.path.join(DATA_DIR, "pairwise_filters_scatter_data.csv")
 OUT_PNG = os.path.join(SCATTERS_DIR, "pairwise_filters_scatter.png")
 
 # ============================================================
@@ -291,43 +298,105 @@ df_pairs.to_csv(OUT_CSV, index=False)
 # Filtros duros
 # -----------------------------------------
 df_filt = df_pairs[
-    (df_pairs["n_trades"] > 1500) &
-    (df_pairs["final_equity"] > 50) &
-    (df_pairs["maxdd"] < 20)
+    (df_pairs["n_trades"] > args.min_n_trades) &
+    (df_pairs["final_equity"] > args.min_final_equity) &
+    (df_pairs["maxdd"] < args.max_maxdd)
 ].copy()
 
 print(f"After hard filters: {len(df_filt)} pairs")
 
 # -----------------------------------------
 # Scatter
+# - First: unfiltered scatter for all pairwise combos (no hard filters)
+# - Second: filtered scatter using the hard filters (as before)
 # -----------------------------------------
-target_score = "n_trades"
+# Use win_rate for colorbar and n_trades for point size.
+color_score = "win_rate"
+size_score = "n_trades"
 
-x = df_filt["maxdd"].astype(float).values
-y = df_filt["final_equity"].astype(float).values
-c = pd.to_numeric(df_filt[target_score], errors="coerce").values
-sizes = np.clip(df_filt["n_trades"].values / 10, 20, 300)
+# Unfiltered scatter (all pairs) — color=win_rate, size=n_trades
+if not df_pairs.empty:
+    x_all = df_pairs["maxdd"].astype(float).values
+    y_all = df_pairs["final_equity"].astype(float).values
+    c_all = pd.to_numeric(df_pairs[color_score], errors="coerce").values
+    sizes_all = np.clip(df_pairs[size_score].values / 10, 20, 300)
 
-plt.figure(figsize=(11, 8))
-sc = plt.scatter(
-    x,
-    y,
-    c=c,
-    s=sizes,
-    cmap="viridis",
-    alpha=0.75,
-    edgecolors="k",
-    linewidths=0.35,
-)
+    # Color mapping: show color only for win_rate in [0.5, 0.9]. Below 0.5 -> neutral gray;
+    # above 0.9 clipped to 0.9.
+    vmin, vmax = 0.5, 0.9
+    cmap = cm.get_cmap("viridis")
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax, clip=True)
 
-plt.colorbar(sc, label=target_score)
-plt.xlabel("Max Drawdown")
-plt.ylabel("Final Equity")
-plt.title("Filtered pairwise combinations")
+    mask_color = (~np.isnan(c_all)) & (c_all >= vmin)
+    c_clipped = np.clip(c_all, vmin, vmax)
 
-plt.tight_layout()
-plt.savefig(os.path.join(SCATTERS_DIR, f"pairwise_scatter_filtered_{target_score}.png"), dpi=160)
-plt.close()
+    plt.figure(figsize=(11, 8))
+    # Points with win_rate < 0.5 plotted in neutral gray (no colorbar mapping)
+    if np.any(~mask_color):
+        idx = np.where(~mask_color)[0]
+        plt.scatter(
+            x_all[idx],
+            y_all[idx],
+            c="#c0c0c0",
+            s=sizes_all[idx],
+            alpha=0.45,
+            edgecolors="k",
+            linewidths=0.2,
+        )
+
+    # Colored points for win_rate >= 0.5 (clipped at 0.9)
+    if np.any(mask_color):
+        idx = np.where(mask_color)[0]
+        sc_all = plt.scatter(
+            x_all[idx],
+            y_all[idx],
+            c=c_clipped[idx],
+            s=sizes_all[idx],
+            cmap=cmap,
+            norm=norm,
+            alpha=0.9,
+            edgecolors="k",
+            linewidths=0.3,
+        )
+        sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+        sm.set_array([])
+        plt.colorbar(sm, ax=plt.gca(), label=color_score)
+
+    plt.xlabel("Max Drawdown")
+    plt.ylabel("Final Equity")
+    plt.title("All pairwise combinations (unfiltered)")
+    plt.tight_layout()
+    plt.savefig(os.path.join(SCATTERS_DIR, "pairwise_scatter.png"), dpi=160)
+    plt.close()
+
+# Filtered scatter (apply hard filters) — color=win_rate, size=n_trades
+if not df_filt.empty:
+    x = df_filt["maxdd"].astype(float).values
+    y = df_filt["final_equity"].astype(float).values
+    c = pd.to_numeric(df_filt[color_score], errors="coerce").values
+    sizes = np.clip(df_filt[size_score].values / 10, 20, 300)
+
+    # For the filtered scatter we do NOT apply the 0.5--0.9 clamp: show full range
+    plt.figure(figsize=(11, 8))
+    sc = plt.scatter(
+        x,
+        y,
+        c=c,
+        s=sizes,
+        cmap="viridis",
+        alpha=0.9,
+        edgecolors="k",
+        linewidths=0.35,
+    )
+
+    plt.colorbar(sc, label=color_score)
+    plt.xlabel("Max Drawdown")
+    plt.ylabel("Final Equity")
+    plt.title("Filtered pairwise combinations")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(SCATTERS_DIR, "pairwise_scatter_filtered.png"), dpi=160)
+    plt.close()
 
 # -----------------------------------------
 # Top 10 por win_rate
@@ -341,13 +410,19 @@ top10 = (
 )
 
 top10.to_csv(
-    os.path.join(SCATTERS_DIR, f"top10_pairs_by_{top10_score}.csv"),
+    os.path.join(DATA_DIR, f"top10_pairs_by_{top10_score}.csv"),
     index=False,
 )
 
+# Also save top10 into pairwise_winners for downstream runners
+PAIRWISE_DIR = os.path.join(EXP_DIR, "pairwise_winners")
+os.makedirs(PAIRWISE_DIR, exist_ok=True)
+top10.to_csv(os.path.join(PAIRWISE_DIR, "top_pairwise.csv"), index=False)
+
 print("Saved:")
-print(f"- pairwise_scatter_filtered_{target_score}.png")
-print(f"- top10_pairs_by_{target_score}.csv")
+print(f"- pairwise_scatter.png")
+print(f"- pairwise_scatter_filtered.png")
+print(f"- top10_pairs_by_{top10_score}.csv")
 print(top10[[
     "filter_a",
     "filter_b",

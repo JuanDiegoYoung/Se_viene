@@ -31,7 +31,8 @@ SCATTERS_DIR = os.path.join(
     "scatters",
 )
 
-IN_CSV = os.path.join(SCATTERS_DIR, "filters_scatter_data.csv")
+DATA_DIR = os.path.join(SCATTERS_DIR, "data")
+IN_CSV = os.path.join(DATA_DIR, "filters_scatter_data.csv")
 OUT_PNG = os.path.join(SCATTERS_DIR, "filters_scatter_filtered.png")
 
 df = pd.read_csv(IN_CSV)
