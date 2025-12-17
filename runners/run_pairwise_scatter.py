@@ -417,7 +417,9 @@ if not df_filt.empty:
 # -----------------------------------------
 # Top 10 por win_rate
 # -----------------------------------------
-top10_score="win_rate"
+
+# Top 10 por profit (final_equity)
+top10_score = "final_equity"
 top10 = (
     df_filt
     .sort_values(top10_score, ascending=False)
