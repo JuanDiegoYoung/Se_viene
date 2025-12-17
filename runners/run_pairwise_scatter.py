@@ -28,6 +28,15 @@ p.add_argument("--tol", type=float, default=1e-9, help="Tolerance for float matc
 p.add_argument("--min-n-trades", type=int, default=1500, help="Minimum trades for a pair to pass hard filters")
 p.add_argument("--min-final-equity", type=float, default=0.0, help="Minimum final equity (profit) for a pair to pass hard filters; default > 0")
 p.add_argument("--max-maxdd", type=float, default=20.0, help="Maximum allowed max drawdown for a pair to pass hard filters")
+p.add_argument("--require-prior-swing", dest="require_prior_swing", action="store_true")
+p.add_argument("--no-require-prior-swing", dest="require_prior_swing", action="store_false")
+p.set_defaults(require_prior_swing=True)
+p.add_argument("--allow-countertrend", dest="allow_countertrend", action="store_true")
+p.add_argument("--no-allow-countertrend", dest="allow_countertrend", action="store_false")
+p.set_defaults(allow_countertrend=False)
+p.add_argument("--allow-micro-structure", dest="allow_micro_structure", action="store_true")
+p.add_argument("--no-allow-micro-structure", dest="allow_micro_structure", action="store_false")
+p.set_defaults(allow_micro_structure=True)
 args = p.parse_args()
 
 rr_str = f"{args.rr:.1f}"
@@ -37,6 +46,7 @@ rr_str = f"{args.rr:.1f}"
 # ============================================================
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
+flags_dir = f"prior_{args.require_prior_swing}_counter_{args.allow_countertrend}_micro_{args.allow_micro_structure}"
 EXP_DIR = os.path.join(
     PROJECT_ROOT,
     "experiments",
@@ -45,6 +55,7 @@ EXP_DIR = os.path.join(
     args.timeframe,
     f"window_{args.window}",
     f"rr_{rr_str}",
+    flags_dir
 )
 
 CANONICAL_DIR = os.path.join(EXP_DIR, "canonical_output")
@@ -61,11 +72,11 @@ OUT_PNG = os.path.join(SCATTERS_DIR, "pairwise_filters_scatter.png")
 # ============================================================
 # Load candles (solo para N y dates)
 # ============================================================
-DATA_DIR = os.path.join(PROJECT_ROOT, "candle_data", args.asset, args.timeframe)
-csvs = [f for f in os.listdir(DATA_DIR) if f.endswith(".csv")]
+CANDLE_DATA_DIR = os.path.join(PROJECT_ROOT, "candle_data", args.asset, args.timeframe)
+csvs = [f for f in os.listdir(CANDLE_DATA_DIR) if f.endswith(".csv")]
 if not csvs:
-    raise SystemExit(f"No candles found in {DATA_DIR}")
-btc = pd.read_csv(os.path.join(DATA_DIR, csvs[0]))
+    raise SystemExit(f"No candles found in {CANDLE_DATA_DIR}")
+btc = pd.read_csv(os.path.join(CANDLE_DATA_DIR, csvs[0]))
 if "open_time" in btc.columns:
     dates = pd.to_datetime(btc["open_time"], unit="ms")
 elif "date" in btc.columns:
@@ -299,9 +310,12 @@ df_pairs.to_csv(OUT_CSV, index=False)
 # -----------------------------------------
 # Filtros duros
 # -----------------------------------------
-# Modified hard filters: only require positive profit (final_equity > 0)
+# Modified hard filters: require positive profit, min trades = 0, max drawdown <= 10000
+# Hardcoded thresholds to ensure we don't accidentally filter too aggressively here
 df_filt = df_pairs[
-    (df_pairs["final_equity"] > 0)
+    (df_pairs["final_equity"] > 0) &
+    (df_pairs["n_trades"] >= 0) &
+    (df_pairs["maxdd"] <= 10000.0)
 ].copy()
 
     # quiet: applied hard filters

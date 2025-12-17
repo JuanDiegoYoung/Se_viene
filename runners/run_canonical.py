@@ -26,7 +26,7 @@ def ensure_dir(p: Path):
 # ============================================================
 # Main
 # ============================================================
-def main(asset, timeframe, strategy, window, rr):
+def main(asset, timeframe, strategy, window, rr, require_prior_swing=True, allow_countertrend=False, allow_micro_structure=True):
 
     # ----------------------------
     # Input data
@@ -46,14 +46,16 @@ def main(asset, timeframe, strategy, window, rr):
     # ----------------------------
     # Output path
     # ----------------------------
+    flags_dir = f"prior_{require_prior_swing}_counter_{allow_countertrend}_micro_{allow_micro_structure}"
     out_dir = (
         PROJECT_ROOT
-        / "Experiments"
+        / "experiments"
         / strategy
         / asset
         / timeframe
         / f"window_{window}"
         / f"rr_{rr}"
+        / flags_dir
         / "canonical_output"
     )
     ensure_dir(out_dir)
@@ -66,7 +68,10 @@ def main(asset, timeframe, strategy, window, rr):
     res = demo_from_csv(
         path=str(data_csv),
         rr=rr,
-        window=window
+        window=window,
+        require_prior_swing=require_prior_swing,
+        allow_countertrend=allow_countertrend,
+        allow_micro_structure=allow_micro_structure,
     )
 
     if res is None:
@@ -152,6 +157,15 @@ if __name__ == "__main__":
     p.add_argument("--strategy", default="Bos")
     p.add_argument("--window", type=int, default=5)
     p.add_argument("--rr", type=float, default=1.0)
+    p.add_argument("--require-prior-swing", dest="require_prior_swing", action="store_true")
+    p.add_argument("--no-require-prior-swing", dest="require_prior_swing", action="store_false")
+    p.set_defaults(require_prior_swing=True)
+    p.add_argument("--allow-countertrend", dest="allow_countertrend", action="store_true")
+    p.add_argument("--no-allow-countertrend", dest="allow_countertrend", action="store_false")
+    p.set_defaults(allow_countertrend=False)
+    p.add_argument("--allow-micro-structure", dest="allow_micro_structure", action="store_true")
+    p.add_argument("--no-allow-micro-structure", dest="allow_micro_structure", action="store_false")
+    p.set_defaults(allow_micro_structure=True)
     args = p.parse_args()
 
     sys.exit(
@@ -161,5 +175,8 @@ if __name__ == "__main__":
             strategy=args.strategy,
             window=args.window,
             rr=args.rr,
+            require_prior_swing=args.require_prior_swing,
+            allow_countertrend=args.allow_countertrend,
+            allow_micro_structure=args.allow_micro_structure,
         )
     )

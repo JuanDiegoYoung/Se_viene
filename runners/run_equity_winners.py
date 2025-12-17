@@ -79,6 +79,15 @@ def main():
     p.add_argument("--timeframe", required=True)
     p.add_argument("--window", type=int, required=True)
     p.add_argument("--rr", type=float, required=True)
+    p.add_argument("--require-prior-swing", dest="require_prior_swing", action="store_true")
+    p.add_argument("--no-require-prior-swing", dest="require_prior_swing", action="store_false")
+    p.set_defaults(require_prior_swing=True)
+    p.add_argument("--allow-countertrend", dest="allow_countertrend", action="store_true")
+    p.add_argument("--no-allow-countertrend", dest="allow_countertrend", action="store_false")
+    p.set_defaults(allow_countertrend=False)
+    p.add_argument("--allow-micro-structure", dest="allow_micro_structure", action="store_true")
+    p.add_argument("--no-allow-micro-structure", dest="allow_micro_structure", action="store_false")
+    p.set_defaults(allow_micro_structure=True)
     p.add_argument("--top_csv", required=False, help="Path to top10 CSV inside scatters folder")
     p.add_argument("--tol", type=float, default=1e-9)
     p.add_argument("--save-equities", dest="save_equities", action="store_true", help="Save generated equity CSVs (default: enabled)")
@@ -90,6 +99,7 @@ def main():
 
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
+    flags_dir = f"prior_{args.require_prior_swing}_counter_{args.allow_countertrend}_micro_{args.allow_micro_structure}"
     EXP_DIR = os.path.join(
         PROJECT_ROOT,
         "experiments",
@@ -98,6 +108,7 @@ def main():
         args.timeframe,
         f"window_{args.window}",
         f"rr_{rr_str}",
+        flags_dir
     )
 
     CANONICAL_DIR = os.path.join(EXP_DIR, "canonical_output")

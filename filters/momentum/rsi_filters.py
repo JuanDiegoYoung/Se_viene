@@ -10,12 +10,17 @@ import matplotlib.pyplot as plt
 # ============================================================
 # Args
 # ============================================================
+
 p = argparse.ArgumentParser()
 p.add_argument("--strategy", required=True)
 p.add_argument("--asset", required=True)
 p.add_argument("--timeframe", required=True)
 p.add_argument("--window", type=int, required=True)
 p.add_argument("--rr", type=float, required=True)
+# Accept extra strategy flags for compatibility
+p.add_argument("--require-prior-swing", action="store_true", default=False, help="(optional, ignored)")
+p.add_argument("--allow-countertrend", action="store_true", default=False, help="(optional, ignored)")
+p.add_argument("--allow-micro-structure", action="store_true", default=False, help="(optional, ignored)")
 args = p.parse_args()
 
 rr_str = f"{args.rr:.1f}"

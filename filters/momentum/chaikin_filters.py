@@ -16,6 +16,12 @@ p.add_argument("--asset", required=True)
 p.add_argument("--timeframe", required=True)
 p.add_argument("--window", type=int, required=True)
 p.add_argument("--rr", type=float, required=True)
+p.add_argument("--require-prior-swing", dest="require_prior_swing", action="store_true")
+p.add_argument("--no-require-prior-swing", dest="require_prior_swing", action="store_false")
+p.add_argument("--allow-countertrend", dest="allow_countertrend", action="store_true")
+p.add_argument("--no-allow-countertrend", dest="allow_countertrend", action="store_false")
+p.add_argument("--allow-micro-structure", dest="allow_micro_structure", action="store_true")
+p.add_argument("--no-allow-micro-structure", dest="allow_micro_structure", action="store_false")
 args = p.parse_args()
 
 rr_str = f"{args.rr:.1f}"
