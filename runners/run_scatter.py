@@ -113,5 +113,4 @@ plt.tight_layout()
 plt.savefig(OUT_PNG, dpi=160)
 plt.close()
 
-print(f"CSV saved to: {OUT_CSV}")
-print(f"Scatter saved to: {OUT_PNG}")
+# quiet: outputs saved to disk

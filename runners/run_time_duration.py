@@ -274,8 +274,7 @@ def main():
     with open(os.path.join(OUT_DIR, "trading_duration_means.json"), "w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"Saved {len(rows)} duration CSVs to: {OUT_DATA}")
-    print(f"Saved {len([r for r in rows if r['hist']])} histograms to: {OUT_PLOTS}")
+    # quiet: duration CSVs and histograms saved to OUT_DIR
 
 
 if __name__ == "__main__":

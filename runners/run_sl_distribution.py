@@ -253,11 +253,10 @@ def main():
     plt.close()
 
     print("OK")
-    print("Cache =", cache_path)
-    print("Saved CSV =", out_csv)
-    print("Saved PNG =", out_png)
-    print("Saved per-pair CSVs to:", OUT_DATA)
-    print("Saved per-pair histograms to:", OUT_PLOTS)
+        # Removed noisy print statements
+        # print("Cache =", cache_path)
+        # print("Saved CSV =", out_csv)
+        # print("Saved PNG =", out_png)
 
 if __name__ == "__main__":
     main()

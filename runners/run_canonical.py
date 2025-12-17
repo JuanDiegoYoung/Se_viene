@@ -58,9 +58,7 @@ def main(asset, timeframe, strategy, window, rr):
     )
     ensure_dir(out_dir)
 
-    print("Running canonical generation")
-    print("Data:", data_csv)
-    print("Out :", out_dir)
+    # canonical generation (quiet mode)
 
     # ----------------------------
     # Run strategy
@@ -82,14 +80,12 @@ def main(asset, timeframe, strategy, window, rr):
     # ----------------------------
     trades_path = out_dir / "trades.csv"
     trades_df.to_csv(trades_path, index=False)
-    print(f"Saved trades ({len(trades_df)}):", trades_path)
 
     # ----------------------------
-    # Save equity CSV
+    # Save equity CSV and plot (always for canonical output)
     # ----------------------------
     equity_path = out_dir / "equity.csv"
     equity.to_csv(equity_path, index=True, header=["equity"])
-    print("Saved equity:", equity_path)
 
     # ----------------------------
     # Plot equity
@@ -123,7 +119,6 @@ def main(asset, timeframe, strategy, window, rr):
     plt.tight_layout()
     plt.savefig(plot_path, dpi=150)
     plt.close()
-    print("Saved equity plot:", plot_path)
 
     # ----------------------------
     # Canonical info
@@ -139,12 +134,11 @@ def main(asset, timeframe, strategy, window, rr):
         "win_rate": float((trades_df["hit"] == "tp").mean()),
     }
 
-    eq = equity.fillna(method="ffill").fillna(0.0)
+    eq = equity.ffill().fillna(0.0)
     info["max_drawdown"] = float((eq.cummax() - eq).max())
 
     info_path = out_dir / "canonical_info.csv"
     pd.DataFrame([info]).to_csv(info_path, index=False)
-    print("Saved canonical info:", info_path)
 
     return 0
 

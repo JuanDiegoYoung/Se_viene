@@ -82,4 +82,4 @@ plt.tight_layout()
 plt.savefig(OUT_PNG, dpi=160)
 plt.close()
 
-print(f"Saved: {OUT_PNG}")
+# quiet: filtered scatter saved to disk

@@ -26,7 +26,7 @@ p.add_argument("--window", type=int, required=True)
 p.add_argument("--rr", type=float, required=True)
 p.add_argument("--tol", type=float, default=1e-9, help="Tolerance for float matching when reconstructing keeps")
 p.add_argument("--min-n-trades", type=int, default=1500, help="Minimum trades for a pair to pass hard filters")
-p.add_argument("--min-final-equity", type=float, default=50.0, help="Minimum final equity for a pair to pass hard filters")
+p.add_argument("--min-final-equity", type=float, default=0.0, help="Minimum final equity (profit) for a pair to pass hard filters; default > 0")
 p.add_argument("--max-maxdd", type=float, default=20.0, help="Maximum allowed max drawdown for a pair to pass hard filters")
 args = p.parse_args()
 
@@ -230,7 +230,7 @@ for fname in filter_names:
     else:
         win_rate = float("nan")
 
-    s = pd.Series(eq_f).ffill().fillna(method="bfill").fillna(0.0).values
+    s = pd.Series(eq_f).ffill().bfill().fillna(0.0).values
     dd = float((np.maximum.accumulate(s) - s).max()) if len(s) else float("nan")
 
     filter_to_stats[fname] = {
@@ -244,7 +244,7 @@ for fname in filter_names:
 keep_matrix = np.vstack([filter_to_keep[name].astype(bool) for name in filter_names])
 cache_path = os.path.join(SCATTERS_DIR, "filter_keep_cache.npz")
 np.savez(cache_path, filter_names=np.array(filter_names, dtype=object), keep_matrix=keep_matrix)
-print(f"Saved keep cache: {cache_path}")
+# quiet: keep cache saved for downstream runners (no noisy print)
 
 # ============================================================
 # Pairwise AND, equity resultante, scatter
@@ -252,10 +252,11 @@ print(f"Saved keep cache: {cache_path}")
 rows = []
 pairs = list(itertools.combinations(filter_names, 2))
 
-print(f"Loaded filters: {len(filter_names)}")
-print(f"Pairwise combinations: {len(pairs)}")
+    # quiet: pairwise computation started
 
-for a, b in pairs:
+total_pairs = len(pairs)
+_print_pairs_progress = None
+for idx_pair, (a, b) in enumerate(pairs, start=1):
     keep_ab = filter_to_keep[a] & filter_to_keep[b]
     kept = trades[keep_ab]
 
@@ -267,7 +268,7 @@ for a, b in pairs:
 
     eq_ab = eq_all - np.cumsum(contrib_all - contrib_ab)
 
-    s = pd.Series(eq_ab).ffill().fillna(method="bfill").fillna(0.0).values
+    s = pd.Series(eq_ab).ffill().bfill().fillna(0.0).values
     maxdd = float((np.maximum.accumulate(s) - s).max()) if len(s) else float("nan")
 
     n_tr = int(len(kept))
@@ -289,6 +290,7 @@ for a, b in pairs:
         "win_rate": win_rate,
         "n_trades": n_tr,
     })
+    # no in-loop progress prints: keep console clean
 
 df_pairs = pd.DataFrame(rows)
 df_pairs = df_pairs.dropna(subset=["final_equity", "maxdd"])
@@ -303,7 +305,7 @@ df_filt = df_pairs[
     (df_pairs["maxdd"] < args.max_maxdd)
 ].copy()
 
-print(f"After hard filters: {len(df_filt)} pairs")
+    # quiet: applied hard filters
 
 # -----------------------------------------
 # Scatter
@@ -321,10 +323,11 @@ if not df_pairs.empty:
     c_all = pd.to_numeric(df_pairs[color_score], errors="coerce").values
     sizes_all = np.clip(df_pairs[size_score].values / 10, 20, 300)
 
-    # Color mapping: show color only for win_rate in [0.5, 0.9]. Below 0.5 -> neutral gray;
-    # above 0.9 clipped to 0.9.
-    vmin, vmax = 0.5, 0.9
-    cmap = cm.get_cmap("viridis")
+    # Color mapping: show color only for win_rate in [vmin, 0.9]. Below vmin -> neutral gray;
+    # vmax clipped to 0.9. Set vmin based on R/RR expectation: 1/(1+rr)
+    vmin = 1.0 / (1.0 + float(args.rr))
+    vmax = 0.9
+    cmap = matplotlib.colormaps.get_cmap("viridis")
     norm = mcolors.Normalize(vmin=vmin, vmax=vmax, clip=True)
 
     mask_color = (~np.isnan(c_all)) & (c_all >= vmin)
@@ -419,15 +422,5 @@ PAIRWISE_DIR = os.path.join(EXP_DIR, "pairwise_winners")
 os.makedirs(PAIRWISE_DIR, exist_ok=True)
 top10.to_csv(os.path.join(PAIRWISE_DIR, "top_pairwise.csv"), index=False)
 
-print("Saved:")
-print(f"- pairwise_scatter.png")
-print(f"- pairwise_scatter_filtered.png")
-print(f"- top10_pairs_by_{top10_score}.csv")
-print(top10[[
-    "filter_a",
-    "filter_b",
-    "win_rate",
-    "final_equity",
-    "maxdd",
-    "n_trades",
-]])
+# quiet: top outputs saved to disk for downstream analysis
+# quiet: top outputs saved to disk for downstream analysis

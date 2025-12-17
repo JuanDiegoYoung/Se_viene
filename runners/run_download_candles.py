@@ -103,9 +103,9 @@ def main():
                 last = row.strip().split(",")
                 # first column is open_time
                 last_saved_open = int(last[0])
-                print(f"Resuming from last saved open_time: {last_saved_open}")
-        except Exception:
-            last_saved_open = None
+                # quiet: resuming from last saved open_time
+            except Exception:
+                last_saved_open = None
 
     # Open file in append mode and write header if needed
     is_new = not os.path.exists(out_path)
@@ -173,13 +173,13 @@ def main():
             f_out.flush()
             last_open = int(data[-1][0])
             cursor = last_open + ms_per_bar
-            print(f"Segment {seg+1}/{segments}: fetched {total_written} bars so far, next start {datetime.utcfromtimestamp(cursor/1000).isoformat()}")
+            # quiet: progress updated in log only
             time.sleep(0.2)
 
     f_out.close()
     if total_written == 0:
         raise SystemExit("No klines downloaded")
-    print(f"Saved {total_written} rows to: {out_path}")
+    # quiet: downloaded rows saved to out_path
 
     # completed incremental download and writing
     # file closed; total_written indicates number of rows appended

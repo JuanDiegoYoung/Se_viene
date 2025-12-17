@@ -79,6 +79,9 @@ def main() -> None:
     p.add_argument("--min-n-trades", type=int, default=None, help="minimum n_trades to pass pairwise filters; forwarded to pairwise runner")
     p.add_argument("--min-final-equity", type=float, default=None, help="minimum final_equity to pass pairwise filters; forwarded to pairwise runner")
     p.add_argument("--max-maxdd", type=float, default=None, help="maximum maxdd to pass pairwise filters; forwarded to pairwise runner")
+    p.add_argument("--save-equities", dest="save_equities", action="store_true", help="Save generated equity CSVs (default: enabled)")
+    p.add_argument("--no-save-equities", dest="save_equities", action="store_false", help="Do not save generated equity CSVs")
+    p.set_defaults(save_equities=True)
     p.add_argument("--stop-on-error", action="store_true", help="abort on first failing runner")
     args = p.parse_args()
 
@@ -92,12 +95,11 @@ def main() -> None:
     if not args.include_single:
         runners = [r for r in runners if r != "run_single_filter.py"]
 
-    print("Runners to execute:")
-    for r in runners:
-        print(" -", r)
+    # Print concise run parameters
+    print(f"Running with: strategy={args.strategy} asset={args.asset} timeframe={args.timeframe} window={args.window} rr={args.rr}")
 
     for script in runners:
-        print(f"\n=== Running: {script} ===")
+        # quiet: running script
         cmd = build_cmd(
             script,
             args.asset,
@@ -149,7 +151,10 @@ def main() -> None:
                 cmd += ["--top_csv", selected_top]
             if script == "run_equity_winners.py":
                 cmd += ["--top_csv", selected_top]
-        print(" ", " ".join(cmd))
+        # propagate save_equities flag to runners that write equities (but keep canonical outputs)
+        if not args.save_equities and script == "run_equity_winners.py":
+            cmd += ["--no-save-equities"]
+        # command: executed silently
         try:
             # Run and forward child stdout/stderr
             proc = subprocess.run(cmd, check=False)
@@ -158,6 +163,17 @@ def main() -> None:
                 print(f"Runner {script} exited with code {rc}")
                 if args.stop_on_error:
                     raise SystemExit(rc)
+            else:
+                # concise stage messages for key runners
+                stage_msgs = {
+                    "run_canonical.py": "Canonical data generated",
+                    "run_all_filters.py": "Filters computed",
+                    "run_pairwise_scatter.py": "Pairwise computed",
+                    "run_equity_winners.py": "Statistics computed",
+                }
+                msg = stage_msgs.get(script)
+                if msg:
+                    print(msg)
         except KeyboardInterrupt:
             raise
         except Exception as e:

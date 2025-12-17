@@ -18,7 +18,7 @@ def parse_binance_files(folder_path):
 
     dfs = []
     if not os.path.isdir(folder_path):
-        print(f"parse_binance_files: folder not found: {folder_path}")
+        # parse_binance_files: folder not found
         return pd.DataFrame()
 
     files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.csv')]
@@ -37,14 +37,15 @@ def parse_binance_files(folder_path):
             except Exception:
                 continue
         else:
-            print(f"Archivo descartado por timeframe: {f}")
+            # Archivo descartado por timeframe
+            continue
             continue
 
         df = df.drop(columns='ignore')
         dfs.append(df)
 
     if not dfs:
-        print('No se cargaron archivos.')
+        # No files loaded
         return pd.DataFrame()
 
     df = pd.concat(dfs).sort_values('open_time').reset_index(drop=True)
@@ -53,33 +54,44 @@ def parse_binance_files(folder_path):
 
 
 # ==================== Funciones ====================
-def build_swings_alternating(df, window=5):
+def build_swings_causal(df, window=5):
+    closes = df['close'].values
     d = df.copy()
-    d['swing_high'] = d['close'][(d['close'] == d['close'].rolling(window, center=True).max())]
-    d['swing_low']  = d['close'][(d['close']  == d['close'].rolling(window, center=True).min())]
-    swings, last = [], None
-    for i, r in d.iterrows():
-        if not np.isnan(r['swing_high']) and last != 'high':
-            swings.append((i, float(r['swing_high']), 'high'))
+    d['swing_high'] = np.nan
+    d['swing_low'] = np.nan
+    swings = []
+    last = None
+
+    for j in range(window, len(closes)):
+        i = j - window
+        past = closes[i:j + 1]
+        px = closes[i]
+
+        if px == past.max() and last != 'high':
+            swings.append((i, float(px), 'high', j))
             last = 'high'
-        elif not np.isnan(r['swing_low']) and last != 'low':
-            swings.append((i, float(r['swing_low']), 'low'))
+
+        elif px == past.min() and last != 'low':
+            swings.append((i, float(px), 'low', j))
             last = 'low'
+
     return d, swings
 
 
 def compute_struct_levels_from_swings(df, swings):
     last_high_price = pd.Series(np.nan, index=df.index)
-    last_high_idx   = pd.Series(np.nan, index=df.index)
-    last_low_price  = pd.Series(np.nan, index=df.index)
-    last_low_idx    = pd.Series(np.nan, index=df.index)
-    for idx, val, t in swings:
+    last_high_idx = pd.Series(np.nan, index=df.index)
+    last_low_price = pd.Series(np.nan, index=df.index)
+    last_low_idx = pd.Series(np.nan, index=df.index)
+
+    for idx, val, t, confirm_idx in swings:
         if t == 'high':
-            last_high_price.iloc[idx] = val
-            last_high_idx.iloc[idx] = idx
+            last_high_price.iloc[confirm_idx] = val
+            last_high_idx.iloc[confirm_idx] = idx
         else:
-            last_low_price.iloc[idx]  = val
-            last_low_idx.iloc[idx]  = idx
+            last_low_price.iloc[confirm_idx] = val
+            last_low_idx.iloc[confirm_idx] = idx
+
     return (
         last_high_price.ffill(),
         last_high_idx.ffill(),
@@ -90,26 +102,26 @@ def compute_struct_levels_from_swings(df, swings):
 
 def detect_bos_from_levels(df, last_high_price, last_high_idx, last_low_price, last_low_idx):
     bos = []
-    broken_high_ref = broken_low_ref = None
+    broken_high_ref = None
+    broken_low_ref = None
+
     for i in range(1, len(df)):
-        if not np.isnan(last_high_price.iloc[i]):
-            ref_h = int(last_high_idx.iloc[i])
-            if (
-                broken_high_ref != ref_h
-                and df['close'].iloc[i] > last_high_price.iloc[i]
-                and df['close'].iloc[i - 1] <= last_high_price.iloc[i - 1]
-            ):
+        cl = df['close'].iloc[i]
+
+        if not np.isnan(last_high_price.iloc[i - 1]):
+            ref_h = int(last_high_idx.iloc[i - 1])
+            lvl_h = last_high_price.iloc[i - 1]
+            if cl > lvl_h and broken_high_ref != ref_h:
                 bos.append((i, 'up'))
                 broken_high_ref = ref_h
-        if not np.isnan(last_low_price.iloc[i]):
-            ref_l = int(last_low_idx.iloc[i])
-            if (
-                broken_low_ref != ref_l
-                and df['close'].iloc[i] < last_low_price.iloc[i]
-                and df['close'].iloc[i - 1] >= last_low_price.iloc[i - 1]
-            ):
+
+        if not np.isnan(last_low_price.iloc[i - 1]):
+            ref_l = int(last_low_idx.iloc[i - 1])
+            lvl_l = last_low_price.iloc[i - 1]
+            if cl < lvl_l and broken_low_ref != ref_l:
                 bos.append((i, 'down'))
                 broken_low_ref = ref_l
+
     return bos
 
 
@@ -185,88 +197,115 @@ def _simulate_trade_from(df, side, j_entry, px_sl, px_tp, *, allow_entry_bar_fil
     return len(df) - 1, float(df['close'].iloc[-1]), 'none'
 
 
-def build_trades_from_bos(df, swings, bos, rr, use_next_open=True, fee=0.00075):
+def build_trades_from_bos(
+    df,
+    swings,
+    bos,
+    rr,
+    use_next_open=True,
+    fee=0.00075,
+    require_prior_swing=True
+):
     rows = []
+
     for i, tr in bos:
-        if tr == 'down':  # abrir short, SL en protected high
-            prot = [s for s in swings if s[2] == 'high' and s[0] < i]
+        if tr == 'down':
+            highs = [
+                s for s in swings
+                if s[2] == 'high' and s[3] <= i
+            ]
+            if require_prior_swing and not highs:
+                continue
+
+            prot = [s for s in highs if s[0] < i]
             if not prot:
                 continue
+
             prot_idx, px_sl = prot[-1][0], float(prot[-1][1])
+
             i_entry = min(i + 1, len(df) - 1) if use_next_open else i
-            px_entry = (
-                float(df['open'].iloc[i + 1]) if (use_next_open and i + 1 < len(df)) else float(df['close'].iloc[i])
-            )
+            px_entry = float(df['open'].iloc[i_entry]) if use_next_open else float(df['close'].iloc[i])
+
             if px_sl <= px_entry:
                 continue
+
             risk = px_sl - px_entry
             px_tp = px_entry - rr * risk
-            start_j = i_entry if use_next_open else i_entry + 1
-            i_exit, px_exit, hit = _simulate_trade_from(df, 'short', start_j, px_sl, px_tp)
-            pnl_net = (px_entry - px_exit) - fee * px_entry - fee * px_exit
-            R_net = pnl_net / risk
-            R_clean = -1.0 if hit == 'sl' else (rr if hit == 'tp' else (px_entry - px_exit) / risk)
-            rows.append(
-                dict(
-                    side='short',
-                    bos_idx=i,
-                    entry_idx=i_entry,
-                    exit_idx=i_exit,
-                    entry=px_entry,
-                    sl=px_sl,
-                    tp=px_tp,
-                    exit=px_exit,
-                    pnl=pnl_net,
-                    R=R_net,
-                    R_clean=R_clean,
-                    hit=hit,
-                    prot_idx=prot_idx,
-                    prot_val=px_sl,
-                )
-            )
-        else:  # tr == 'up' -> abrir long, SL en protected low
-            prot = [s for s in swings if s[2] == 'low' and s[0] < i]
-            if not prot:
-                continue
-            prot_idx, px_sl = prot[-1][0], float(prot[-1][1])
-            i_entry = min(i + 1, len(df) - 1) if use_next_open else i
-            px_entry = (
-                float(df['open'].iloc[i + 1]) if (use_next_open and i + 1 < len(df)) else float(df['close'].iloc[i])
-            )
-            if px_sl >= px_entry:
-                continue
-            risk = px_entry - px_sl
-            px_tp = px_entry + rr * risk
-            start_j = i_entry if use_next_open else i_entry + 1
-            i_exit, px_exit, hit = _simulate_trade_from(df, 'long', start_j, px_sl, px_tp)
-            pnl_net = (px_exit - px_entry) - fee * px_entry - fee * px_exit
-            R_net = pnl_net / risk
-            R_clean = -1.0 if hit == 'sl' else (rr if hit == 'tp' else (px_exit - px_entry) / risk)
-            rows.append(
-                dict(
-                    side='long',
-                    bos_idx=i,
-                    entry_idx=i_entry,
-                    exit_idx=i_exit,
-                    entry=px_entry,
-                    sl=px_sl,
-                    tp=px_tp,
-                    exit=px_exit,
-                    pnl=pnl_net,
-                    R=R_net,
-                    R_clean=R_clean,
-                    hit=hit,
-                    prot_idx=prot_idx,
-                    prot_val=px_sl,
-                )
+
+            i_exit, px_exit, hit = _simulate_trade_from(
+                df, 'short', i_entry, px_sl, px_tp
             )
 
+            pnl = (px_entry - px_exit) - fee * px_entry - fee * px_exit
+
+            rows.append(dict(
+                side='short',
+                bos_idx=i,
+                entry_idx=i_entry,
+                exit_idx=i_exit,
+                entry=px_entry,
+                sl=px_sl,
+                tp=px_tp,
+                exit=px_exit,
+                pnl=pnl,
+                R=pnl / risk,
+                hit=hit,
+                prot_idx=prot_idx,
+                prot_val=px_sl
+            ))
+
+        else:
+            lows = [
+                s for s in swings
+                if s[2] == 'low' and s[3] <= i
+            ]
+            if require_prior_swing and not lows:
+                continue
+
+            prot = [s for s in lows if s[0] < i]
+            if not prot:
+                continue
+
+            prot_idx, px_sl = prot[-1][0], float(prot[-1][1])
+
+            i_entry = min(i + 1, len(df) - 1) if use_next_open else i
+            px_entry = float(df['open'].iloc[i_entry]) if use_next_open else float(df['close'].iloc[i])
+
+            if px_sl >= px_entry:
+                continue
+
+            risk = px_entry - px_sl
+            px_tp = px_entry + rr * risk
+
+            i_exit, px_exit, hit = _simulate_trade_from(
+                df, 'long', i_entry, px_sl, px_tp
+            )
+
+            pnl = (px_exit - px_entry) - fee * px_entry - fee * px_exit
+
+            rows.append(dict(
+                side='long',
+                bos_idx=i,
+                entry_idx=i_entry,
+                exit_idx=i_exit,
+                entry=px_entry,
+                sl=px_sl,
+                tp=px_tp,
+                exit=px_exit,
+                pnl=pnl,
+                R=pnl / risk,
+                hit=hit,
+                prot_idx=prot_idx,
+                prot_val=px_sl
+            ))
+
     trades_df = pd.DataFrame(rows)
-    steps_Rnet = pd.Series(0.0, index=df.index, dtype=float)
+
+    steps_R = pd.Series(0.0, index=df.index)
     for _, r in trades_df.iterrows():
-        steps_Rnet.iloc[int(r['exit_idx'])] += r['R']
-    equity_Rnet = steps_Rnet.cumsum()
-    return trades_df, equity_Rnet
+        steps_R.iloc[int(r['exit_idx'])] += r['R']
+
+    return trades_df, steps_R.cumsum()
 
 
 def plot_bos_trades(df, bos, trades_df, title='BOS con SL/TP y operaciones'):
@@ -321,15 +360,15 @@ def plot_equity(equity):
 
 def demo_from_csv(path='velas.csv', rr=1.0, window=5):
     if not os.path.exists(path):
-        print(f"Demo CSV not found: {path}")
+        # demo CSV not found
         return
     df = pd.read_csv(path)
     df = df.reset_index(drop=True)
-    d, swings = build_swings_alternating(df, window=window)
+    d, swings = build_swings_causal(df, window=window)
     lh_p, lh_i, ll_p, ll_i = compute_struct_levels_from_swings(d, swings)
     bos = detect_bos_from_levels(d, lh_p, lh_i, ll_p, ll_i)
     trades_df, equity = build_trades_from_bos(df, swings, bos, rr=rr)
-    print('Trades:', len(trades_df))
+    # trades computed (count available in returned DataFrame)
     return trades_df, equity
 
 

@@ -3,6 +3,7 @@ import argparse
 import os
 import subprocess
 import glob
+import sys
 
 # ============================================================
 # Args
@@ -47,11 +48,16 @@ filter_scripts = sorted(
 if not filter_scripts:
     raise SystemExit("No filter scripts found")
 
-for script in filter_scripts:
-    print(f"Running filter: {os.path.basename(script)}")
+total = len(filter_scripts)
+# logs dir for individual filter outputs
+LOGS_DIR = os.path.join(OUT_DIR, "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+
+for i, script in enumerate(filter_scripts, start=1):
+    name = os.path.basename(script)
 
     cmd = [
-        "python",
+        sys.executable,
         script,
         "--strategy", args.strategy,
         "--asset", args.asset,
@@ -64,6 +70,11 @@ for script in filter_scripts:
     env["CANONICAL_DIR"] = CANONICAL_DIR
     env["OUT_DIR"] = OUT_DIR
 
-    subprocess.run(cmd, check=True, env=env)
+    # redirect child stdout/stderr to per-filter log files to avoid interleaving
+    logfile_base = os.path.join(LOGS_DIR, f"{name}")
+    out_path = logfile_base + ".out"
+    err_path = logfile_base + ".err"
+    with open(out_path, "wb") as out_f, open(err_path, "wb") as err_f:
+        subprocess.run(cmd, check=True, env=env, stdout=out_f, stderr=err_f)
 
-print("All filters executed successfully")
+    # per-filter logs are written to iteration_1/logs; keep console silent for each filter

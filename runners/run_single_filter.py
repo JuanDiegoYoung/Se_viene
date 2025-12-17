@@ -58,10 +58,7 @@ name = filter_script.stem
 out_file = logs_dir / f"{name}.out"
 err_file = logs_dir / f"{name}.err"
 
-print("Running filter")
-print(" Filter   :", filter_script)
-print(" Canonical:", canonical_dir)
-print(" Output   :", iter1_dir)
+# quiet: invoking single filter (logs written to files)
 
 env = dict(os.environ)
 env["CANONICAL_DIR"] = str(canonical_dir)
@@ -87,9 +84,8 @@ with out_file.open("wb") as out_f, err_file.open("wb") as err_f:
         env=env,
     )
 
-if ret.returncode == 0:
-    print("OK")
-else:
-    print(f"FAIL (code {ret.returncode}) → check logs")
+if ret.returncode != 0:
+    # failure recorded in per-filter logs
+    pass
 
 sys.exit(ret.returncode)

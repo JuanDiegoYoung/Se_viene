@@ -81,6 +81,9 @@ def main():
     p.add_argument("--rr", type=float, required=True)
     p.add_argument("--top_csv", required=False, help="Path to top10 CSV inside scatters folder")
     p.add_argument("--tol", type=float, default=1e-9)
+    p.add_argument("--save-equities", dest="save_equities", action="store_true", help="Save generated equity CSVs (default: enabled)")
+    p.add_argument("--no-save-equities", dest="save_equities", action="store_false", help="Do not save generated equity CSVs")
+    p.set_defaults(save_equities=True)
     args = p.parse_args()
 
     rr_str = f"{args.rr:.1f}"
@@ -260,11 +263,12 @@ def main():
         out_path = os.path.join(OUT_DATA_DIR, out_name)
 
         # save with dates if available
-        try:
-            df_out = pd.DataFrame({"date": dates.reset_index(drop=True), "equity": eq_ab})
-            df_out.to_csv(out_path, index=False)
-        except Exception:
-            pd.DataFrame({"equity": eq_ab}).to_csv(out_path, index=True)
+        if args.save_equities:
+            try:
+                df_out = pd.DataFrame({"date": dates.reset_index(drop=True), "equity": eq_ab})
+                df_out.to_csv(out_path, index=False)
+            except Exception:
+                pd.DataFrame({"equity": eq_ab}).to_csv(out_path, index=True)
 
         saved_data.append(out_path)
 
@@ -345,13 +349,7 @@ def main():
         with open(os.path.join(OUT_SL_DIR, "sl_means_top_pairs.json"), "w") as f:
             json.dump(sl_means, f, indent=2)
 
-    # concise summary
-    print(f"Saved {len(saved_data)} equity CSVs to: {OUT_DATA_DIR}")
-    print(f"Saved {len(saved_plots)} plots to: {OUT_EQUITY_DIR}")
-    if sl_summary_rows:
-        print(f"Saved SL CSVs/hists to: {OUT_SL_DIR} (summary rows: {len(sl_summary_rows)})")
-    if skipped:
-        print(f"Skipped {skipped} pairs due to missing filters")
+    # quiet: saved equity CSVs, plots and SL summaries stored under OUT_DIR
 
 
 if __name__ == "__main__":
