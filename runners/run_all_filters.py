@@ -4,6 +4,7 @@ import os
 import subprocess
 import glob
 import sys
+import tempfile
 
 # ============================================================
 # Args
@@ -35,6 +36,11 @@ EXP_DIR = os.path.join(
 
 CANONICAL_DIR = os.path.join(EXP_DIR, "canonical_output")
 OUT_DIR = os.path.join(EXP_DIR, "iteration_1")
+
+# If parent requested no saving of equities, redirect OUT_DIR to a tempdir
+if os.environ.get("NO_SAVE_EQUITIES"):
+    tmp = tempfile.mkdtemp(prefix="pa_filters_out_")
+    OUT_DIR = tmp
 
 FILTERS_ROOT = os.path.join(PROJECT_ROOT, "filters")
 

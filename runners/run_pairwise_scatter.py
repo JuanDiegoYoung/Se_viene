@@ -299,10 +299,9 @@ df_pairs.to_csv(OUT_CSV, index=False)
 # -----------------------------------------
 # Filtros duros
 # -----------------------------------------
+# Modified hard filters: only require positive profit (final_equity > 0)
 df_filt = df_pairs[
-    (df_pairs["n_trades"] > args.min_n_trades) &
-    (df_pairs["final_equity"] > args.min_final_equity) &
-    (df_pairs["maxdd"] < args.max_maxdd)
+    (df_pairs["final_equity"] > 0)
 ].copy()
 
     # quiet: applied hard filters

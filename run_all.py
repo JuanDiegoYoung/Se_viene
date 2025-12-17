@@ -154,6 +154,11 @@ def main() -> None:
         # propagate save_equities flag to runners that write equities (but keep canonical outputs)
         if not args.save_equities and script == "run_equity_winners.py":
             cmd += ["--no-save-equities"]
+        # If user asked to not save equities, set env flag so child runners/filters
+        # can redirect or skip writing equity CSVs.
+        if not args.save_equities:
+            os.environ["NO_SAVE_EQUITIES"] = "1"
+
         # command: executed silently
         try:
             # Run and forward child stdout/stderr
