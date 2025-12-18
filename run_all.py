@@ -104,16 +104,19 @@ def main() -> None:
         filtered_runners = [r for r in filtered_runners if r != "run_single_filter.py"]
 
     # Si alguna flag no se especifica por CLI, iterar sobre todas las combinaciones posibles
+    # Detect whether the CLI invocation explicitly provided the dashed flags
     flag_options = {
-        'require_prior_swing': [True, False] if 'require_prior_swing' not in sys.argv and 'no-require-prior-swing' not in sys.argv else [args.require_prior_swing],
-        'allow_countertrend': [True, False] if 'allow_countertrend' not in sys.argv and 'no-allow-countertrend' not in sys.argv else [args.allow_countertrend],
-        'allow_micro_structure': [True, False] if 'allow_micro_structure' not in sys.argv and 'no-allow-micro-structure' not in sys.argv else [args.allow_micro_structure],
+        'require_prior_swing': [True, False] if '--require-prior-swing' not in sys.argv and '--no-require-prior-swing' not in sys.argv else [args.require_prior_swing],
+        'allow_countertrend': [True, False] if '--allow-countertrend' not in sys.argv and '--no-allow-countertrend' not in sys.argv else [args.allow_countertrend],
+        'allow_micro_structure': [True, False] if '--allow-micro-structure' not in sys.argv and '--no-allow-micro-structure' not in sys.argv else [args.allow_micro_structure],
     }
     combinations = list(itertools.product(*flag_options.values()))
 
     for combo in combinations:
         combo_flags = dict(zip(flag_options.keys(), combo))
         print(f"\n=== Running with flags: {combo_flags} ===")
+        # Sufijo de flags para carpetas únicas por combinación
+        flags_dir = f"prior_{combo_flags['require_prior_swing']}_counter_{combo_flags['allow_countertrend']}_micro_{combo_flags['allow_micro_structure']}"
         for script in filtered_runners:
             cmd = build_cmd(
                 script,
@@ -124,7 +127,7 @@ def main() -> None:
                 strategy=args.strategy,
             )
             # auto-detect top/pairs CSV produced by pairwise scatter
-            base_exp = os.path.join("experiments", args.strategy, args.asset, args.timeframe, f"window_{args.window}", f"rr_{args.rr}")
+            base_exp = os.path.join("experiments", args.strategy, args.asset, args.timeframe, f"window_{args.window}", f"rr_{args.rr}", flags_dir)
             scatters_data = os.path.join(base_exp, "scatters", "data")
             scatters_root = os.path.join(base_exp, "scatters")
             selected_top = None

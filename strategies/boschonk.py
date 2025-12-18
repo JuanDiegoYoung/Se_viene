@@ -358,7 +358,7 @@ def plot_equity(equity):
     plt.show()
 
 
-def demo_from_csv(path='velas.csv', rr=1.0, window=5):
+def demo_from_csv(path='velas.csv', rr=1.0, window=5, require_prior_swing=True, allow_countertrend=False, allow_micro_structure=True):
     if not os.path.exists(path):
         # demo CSV not found
         return
@@ -367,7 +367,7 @@ def demo_from_csv(path='velas.csv', rr=1.0, window=5):
     d, swings = build_swings_causal(df, window=window)
     lh_p, lh_i, ll_p, ll_i = compute_struct_levels_from_swings(d, swings)
     bos = detect_bos_from_levels(d, lh_p, lh_i, ll_p, ll_i)
-    trades_df, equity = build_trades_from_bos(df, swings, bos, rr=rr)
+    trades_df, equity = build_trades_from_bos(df, swings, bos, rr=rr, require_prior_swing=require_prior_swing)
     # trades computed (count available in returned DataFrame)
     return trades_df, equity
 

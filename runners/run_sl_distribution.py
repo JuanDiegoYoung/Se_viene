@@ -79,6 +79,16 @@ def main():
     p.add_argument("--rr", type=float, required=True)
     p.add_argument("--pairs_csv", required=False, help="Path to pairs CSV (optional). If omitted the script will try to detect top CSV in pairwise_winners or scatters directories.")
     p.add_argument("--top_k", type=int, default=10)
+    # Accept extra strategy flags for compatibility
+    p.add_argument("--require-prior-swing", dest="require_prior_swing", action="store_true")
+    p.add_argument("--no-require-prior-swing", dest="require_prior_swing", action="store_false")
+    p.set_defaults(require_prior_swing=True)
+    p.add_argument("--allow-countertrend", dest="allow_countertrend", action="store_true")
+    p.add_argument("--no-allow-countertrend", dest="allow_countertrend", action="store_false")
+    p.set_defaults(allow_countertrend=False)
+    p.add_argument("--allow-micro-structure", dest="allow_micro_structure", action="store_true")
+    p.add_argument("--no-allow-micro-structure", dest="allow_micro_structure", action="store_false")
+    p.set_defaults(allow_micro_structure=True)
     args = p.parse_args()
 
     rr_str = f"{args.rr:.1f}"
@@ -93,6 +103,7 @@ def main():
         args.timeframe,
         f"window_{args.window}",
         f"rr_{rr_str}",
+        f"prior_{args.require_prior_swing}_counter_{args.allow_countertrend}_micro_{args.allow_micro_structure}",
     )
 
     CANONICAL_DIR = os.environ.get("CANONICAL_DIR", os.path.join(EXP_DIR, "canonical_output"))

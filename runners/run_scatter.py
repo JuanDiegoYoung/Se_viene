@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 # Args
 # ============================================================
 
+
 p = argparse.ArgumentParser()
 p.add_argument("--strategy", required=True)
 p.add_argument("--asset", required=True)
@@ -19,9 +20,15 @@ p.add_argument("--timeframe", required=True)
 p.add_argument("--window", type=int, required=True)
 p.add_argument("--rr", type=float, required=True)
 # Accept extra strategy flags for compatibility
-p.add_argument("--require-prior-swing", action="store_true", default=False, help="(optional, ignored)")
-p.add_argument("--allow-countertrend", action="store_true", default=False, help="(optional, ignored)")
-p.add_argument("--allow-micro-structure", action="store_true", default=False, help="(optional, ignored)")
+p.add_argument("--require-prior-swing", dest="require_prior_swing", action="store_true")
+p.add_argument("--no-require-prior-swing", dest="require_prior_swing", action="store_false")
+p.set_defaults(require_prior_swing=True)
+p.add_argument("--allow-countertrend", dest="allow_countertrend", action="store_true")
+p.add_argument("--no-allow-countertrend", dest="allow_countertrend", action="store_false")
+p.set_defaults(allow_countertrend=False)
+p.add_argument("--allow-micro-structure", dest="allow_micro_structure", action="store_true")
+p.add_argument("--no-allow-micro-structure", dest="allow_micro_structure", action="store_false")
+p.set_defaults(allow_micro_structure=True)
 args = p.parse_args()
 
 rr_str = f"{args.rr:.1f}"
@@ -29,8 +36,9 @@ rr_str = f"{args.rr:.1f}"
 # ============================================================
 # Paths (FIX ROOT)
 # ============================================================
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+flags_dir = f"prior_{args.require_prior_swing}_counter_{args.allow_countertrend}_micro_{args.allow_micro_structure}"
 EXP_DIR = os.path.join(
     PROJECT_ROOT,
     "experiments",
@@ -39,6 +47,7 @@ EXP_DIR = os.path.join(
     args.timeframe,
     f"window_{args.window}",
     f"rr_{rr_str}",
+    flags_dir
 )
 
 INFO_DIR = os.path.join(EXP_DIR, "iteration_1", "info")
