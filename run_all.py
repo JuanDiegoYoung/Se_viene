@@ -33,6 +33,7 @@ def find_runners() -> List[str]:
         "run_trade_duration.py",
         "run_time_duration.py",
         "run_equity_winners.py",
+        "run_delete_csv.py",
     ]
 
     ordered = []
