@@ -104,8 +104,8 @@ def main():
                 # first column is open_time
                 last_saved_open = int(last[0])
                 # quiet: resuming from last saved open_time
-            except Exception:
-                last_saved_open = None
+        except Exception:
+            last_saved_open = None
 
     # Open file in append mode and write header if needed
     is_new = not os.path.exists(out_path)

@@ -1,0 +1,12 @@
+{
+  "squeeze_off__squeeze_on": 705.7091869918695,
+  "chaikin_confirmed__keltner_breakout": 1210.7880143884893,
+  "cmf_pos__keltner_breakout": 1177.931491053678,
+  "dvi_long_0.70__psar_strength": 911.5945222072679,
+  "chaikin_pos__keltner_breakout": 1143.797133333333,
+  "dvi_long_0.70__psar_confirmed": 903.7155118110237,
+  "dvi_long_0.70__psar_trend": 903.7155118110237,
+  "cmf_thresh__keltner_breakout": 1177.130937019969,
+  "cmf_quantile__keltner_breakout": 1151.1530859374998,
+  "chaikin_pos__rec_expand_1.70": 877.1660989810771
+}

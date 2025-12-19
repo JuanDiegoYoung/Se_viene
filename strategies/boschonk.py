@@ -161,6 +161,16 @@ def _last_swing_before(swings, i, t):
     return None, np.nan
 
 
+def last_bos_dir_before(bos, idx):
+    prev = None
+    for bi, d in bos:
+        if bi < idx:
+            prev = d
+        else:
+            break
+    return prev
+
+
 def _simulate_trade_from(df, side, j_entry, px_sl, px_tp, *, allow_entry_bar_fill=True, touch_mode='strict', eps_frac=1e-4):
     for j in range(j_entry, len(df)):
         hi = float(df['high'].iloc[j]); lo = float(df['low'].iloc[j]); cl = float(df['close'].iloc[j])
@@ -204,12 +214,17 @@ def build_trades_from_bos(
     rr,
     use_next_open=True,
     fee=0.00075,
-    require_prior_swing=True
+    require_prior_swing=True,
+    allow_countertrend=False,
 ):
     rows = []
 
     for i, tr in bos:
         if tr == 'down':
+            if not allow_countertrend:
+                prev = last_bos_dir_before(bos, i)
+                if prev is None or tr != prev:
+                    continue
             highs = [
                 s for s in swings
                 if s[2] == 'high' and s[3] <= i
@@ -255,6 +270,10 @@ def build_trades_from_bos(
             ))
 
         else:
+            if not allow_countertrend:
+                prev = last_bos_dir_before(bos, i)
+                if prev is None or tr != prev:
+                    continue
             lows = [
                 s for s in swings
                 if s[2] == 'low' and s[3] <= i
@@ -367,7 +386,56 @@ def demo_from_csv(path='velas.csv', rr=1.0, window=5, require_prior_swing=True, 
     d, swings = build_swings_causal(df, window=window)
     lh_p, lh_i, ll_p, ll_i = compute_struct_levels_from_swings(d, swings)
     bos = detect_bos_from_levels(d, lh_p, lh_i, ll_p, ll_i)
-    trades_df, equity = build_trades_from_bos(df, swings, bos, rr=rr, require_prior_swing=require_prior_swing)
+    # Optionally filter micro-structure from swings (keep only relevant swings per trend)
+    def filter_micro_structure(swings_in, bos_in, allow_micro=True):
+        if allow_micro:
+            return swings_in
+
+        out_sw = []
+        last_up_high = None
+        last_down_low = None
+        prev_trend = None
+
+        for i, px, typ, confirm in swings_in:
+            trend = last_bos_dir_before(bos_in, confirm)
+
+            if trend != prev_trend:
+                if trend == 'up':
+                    last_up_high = None
+                if trend == 'down':
+                    last_down_low = None
+                prev_trend = trend
+
+            if trend is None:
+                out_sw.append((i, px, typ, confirm))
+                continue
+
+            if trend == 'up' and typ == 'high':
+                if last_up_high is None or px >= last_up_high:
+                    out_sw.append((i, px, typ, confirm))
+                    last_up_high = px
+                continue
+
+            if trend == 'down' and typ == 'low':
+                if last_down_low is None or px <= last_down_low:
+                    out_sw.append((i, px, typ, confirm))
+                    last_down_low = px
+                continue
+
+            out_sw.append((i, px, typ, confirm))
+
+        return out_sw
+
+    swings_filtered = filter_micro_structure(swings, bos, allow_micro_structure)
+
+    trades_df, equity = build_trades_from_bos(
+        df,
+        swings_filtered,
+        bos,
+        rr=rr,
+        require_prior_swing=require_prior_swing,
+        allow_countertrend=allow_countertrend,
+    )
     # trades computed (count available in returned DataFrame)
     return trades_df, equity
 
